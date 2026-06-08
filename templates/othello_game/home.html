@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Othello Arena{% endblock %}
+{% block content %}
+<style>
+.hero{text-align:center;padding:4rem 2rem 2rem;}
+.mini-board{display:inline-grid;grid-template-columns:repeat(8,36px);grid-template-rows:repeat(8,36px);gap:2px;background:var(--green-dim);border-radius:8px;padding:8px;margin-bottom:2rem;box-shadow:0 0 50px rgba(45,122,79,0.25);}
+.mc{width:36px;height:36px;background:var(--green);border-radius:3px;display:flex;align-items:center;justify-content:center;}
+.mc .disc{width:24px;height:24px;border-radius:50%;}
+.disc.b{background:#111;box-shadow:inset 0 2px 4px rgba(255,255,255,0.1);}
+.disc.w{background:#f0f0ee;box-shadow:inset 0 2px 4px rgba(0,0,0,0.2);}
+.hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,6vw,4rem);letter-spacing:.1em;color:var(--text);margin-bottom:.5rem;}
+.hero-title .g{color:var(--green-light);}
+.hero-sub{color:var(--text-dim);font-size:1rem;max-width:480px;margin:0 auto 2.5rem;}
+.depth-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.8rem;max-width:860px;margin:0 auto 3rem;}
+.depth-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.3rem .8rem;text-align:center;text-decoration:none;color:var(--text);transition:all .2s;}
+.depth-card:hover{border-color:var(--green-dim);transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,0.5);}
+.depth-num{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:.05em;color:var(--green-light);line-height:1;}
+.depth-lbl{font-size:.65rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);margin:.3rem 0;}
+.depth-elo{font-size:.82rem;color:var(--text-dim);}
+.depth-elo strong{color:#f0f0ee;}
+.section-lbl{font-size:.68rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--text-dim);margin-bottom:1.2rem;}
+.cta-row{display:flex;gap:1rem;justify-content:center;}
+</style>
+<div class="container"><div class="hero">
+  <!-- Decorative board -->
+  <div class="mini-board">
+    {% for i in "0000000000000000000bw0000wb00000bw0000wb000000000000000000000000" %}
+    <div class="mc">{% if i == 'b' %}<div class="disc b"></div>{% elif i == 'w' %}<div class="disc w"></div>{% endif %}</div>
+    {% endfor %}
+  </div>
+  <h1 class="hero-title"><span class="g">Othello</span> Arena</h1>
+  <p class="hero-sub">Flip discs, dominate the board, climb the ELO ladder against a minimax AI.</p>
+  {% if user.is_authenticated %}
+    <p class="section-lbl">Choose AI difficulty</p>
+    <div class="depth-grid">
+      {% for depth, elo in depths %}
+      <a href="/game/play/?depth={{ depth }}" class="depth-card">
+        <div class="depth-num">{{ depth }}</div>
+        <div class="depth-lbl">Depth {{ depth }}</div>
+        <div class="depth-elo">AI ELO <strong>{{ elo }}</strong></div>
+      </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="cta-row">
+      <a href="/accounts/register/" class="btn btn-primary">Create Account</a>
+      <a href="/accounts/login/" class="btn">Sign In</a>
+    </div>
+  {% endif %}
+</div></div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Profile — {{ player.username }}{% endblock %}
+{% block content %}
+<style>
+.pw{max-width:1100px;margin:0 auto;padding:2rem;}
+.ph{display:grid;grid-template-columns:auto 1fr;gap:2rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:2rem;margin-bottom:2rem;align-items:center;}
+@media(max-width:600px){.ph{grid-template-columns:1fr;}}
+.avatar{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--green-dim),var(--green));display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:#fff;}
+.pname{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:.08em;color:var(--green-light);}
+.pmeta{color:var(--text-dim);font-size:.88rem;margin-top:.2rem;}
+.srow{display:flex;gap:2rem;margin-top:1rem;flex-wrap:wrap;}
+.stat{text-align:center;}
+.sv{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--text);line-height:1;}
+.sv.elo{color:var(--green-light);font-size:2.2rem;}
+.sv.win{color:var(--win);}
+.sv.loss{color:var(--loss);}
+.sv.draw{color:var(--draw);}
+.sl{font-size:.62rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-top:.2rem;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;}
+@media(max-width:660px){.g2{grid-template-columns:1fr;}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.ph2{padding:.6rem 1rem;border-bottom:1px solid var(--border);font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-light);}
+.pb{padding:1rem;}
+#elo-chart{width:100%;height:180px;}
+table.dt{width:100%;border-collapse:collapse;font-size:.85rem;}
+.dt th{font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);padding:.4rem .6rem;text-align:left;border-bottom:1px solid var(--border);}
+.dt td{padding:.5rem .6rem;border-bottom:1px solid rgba(30,46,34,0.5);}
+.dt tr:last-child td{border-bottom:none;}
+.wb{display:flex;gap:2px;height:7px;border-radius:4px;overflow:hidden;width:70px;}
+.wb-w{background:var(--win);}
+.wb-l{background:var(--loss);}
+.wb-d{background:var(--draw);}
+.gr{display:grid;grid-template-columns:52px 80px 1fr auto auto;gap:.5rem 1rem;align-items:center;padding:.55rem 0;border-bottom:1px solid rgba(30,46,34,0.5);font-size:.85rem;}
+.gr:last-child{border-bottom:none;}
+.rb{display:inline-block;padding:2px 8px;border-radius:3px;font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;}
+.rb-win{background:rgba(76,190,122,.15);color:var(--win);border:1px solid rgba(76,190,122,.3);}
+.rb-loss{background:rgba(232,85,85,.15);color:var(--loss);border:1px solid rgba(232,85,85,.3);}
+.rb-draw{background:rgba(122,154,175,.15);color:var(--draw);border:1px solid rgba(122,154,175,.3);}
+.dt{color:var(--text-dim);font-size:.8rem;}
+.ed{font-weight:600;font-size:.82rem;}
+.pos{color:var(--win);}
+.neg{color:var(--loss);}
+.zero{color:var(--draw);}
+</style>
+<div class="pw">
+  <div class="ph">
+    <div class="avatar">{{ player.username|first|upper }}</div>
+    <div>
+      <div class="pname">{{ player.username }}</div>
+      <div class="pmeta">{{ player.email }} &middot; Joined {{ player.date_joined|date:"M Y" }}</div>
+      <div class="srow">
+        <div class="stat"><div class="sv elo">{{ player.elo }}</div><div class="sl">ELO</div></div>
+        <div class="stat"><div class="sv">{{ player.games_played }}</div><div class="sl">Games</div></div>
+        <div class="stat"><div class="sv win">{{ player.wins }}</div><div class="sl">Wins</div></div>
+        <div class="stat"><div class="sv loss">{{ player.losses }}</div><div class="sl">Losses</div></div>
+        <div class="stat"><div class="sv draw">{{ player.draws }}</div><div class="sl">Draws</div></div>
+        <div class="stat"><div class="sv">{{ player.win_rate }}%</div><div class="sl">Win Rate</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="panel"><div class="ph2">ELO Trend</div><div class="pb" style="padding:.5rem;"><canvas id="elo-chart"></canvas></div></div>
+    <div class="panel"><div class="ph2">Performance by Depth</div><div class="pb" style="padding:.5rem;">
+      <table class="dt">
+        <thead><tr><th>Depth</th><th>AI ELO</th><th>G</th><th>W/L/D</th><th>Bar</th></tr></thead>
+        <tbody>
+          {% for depth, s in depth_stats.items %}
+          <tr>
+            <td><strong style="color:var(--green-light)">{{ depth }}</strong></td>
+            <td style="color:var(--text-dim)">{{ s.ai_elo }}</td>
+            <td>{{ s.games }}</td>
+            <td><span class="pos">{{ s.wins }}</span>/<span class="neg">{{ s.losses }}</span>/<span class="zero">{{ s.draws }}</span></td>
+            <td>{% if s.games > 0 %}<div class="wb">{% widthratio s.wins s.games 70 as wp %}{% widthratio s.losses s.games 70 as lp %}{% widthratio s.draws s.games 70 as dp %}<div class="wb-w" style="width:{{ wp }}px"></div><div class="wb-l" style="width:{{ lp }}px"></div><div class="wb-d" style="width:{{ dp }}px"></div></div>{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+  <div class="panel" style="margin-bottom:2rem;">
+    <div class="ph2">Recent Games</div>
+    <div class="pb">
+      {% if recent_games %}
+        {% for g in recent_games %}
+        <div class="gr">
+          <span class="rb rb-{{ g.result }}">{{ g.result|upper }}</span>
+          <span class="dt">vs AI d{{ g.ai_depth }}</span>
+          <span class="dt">{{ g.played_at|date:"M d, Y" }} &middot; {{ g.player_score }}–{{ g.ai_score }}</span>
+          <span class="dt">{{ g.duration_display }}</span>
+          <span class="ed {% if g.elo_change > 0 %}pos{% elif g.elo_change < 0 %}neg{% else %}zero{% endif %}">{% if g.elo_change > 0 %}+{% endif %}{{ g.elo_change }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="color:var(--text-dim);text-align:center;padding:1.5rem;">No games yet. <a href="/game/" style="color:var(--green-light)">Play your first game!</a></p>
+      {% endif %}
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:1.5rem;"><a href="/game/" class="btn btn-primary">Play Now</a></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const h={{ elo_history_json|safe }};
+const ctx=document.getElementById('elo-chart').getContext('2d');
+if(h.length){new Chart(ctx,{type:'line',data:{labels:h.map(g=>g.date),datasets:[{label:'ELO',data:h.map(g=>g.elo),borderColor:'#4cbe7a',backgroundColor:'rgba(76,190,122,0.07)',borderWidth:2,pointRadius:4,tension:.35,fill:true,pointBackgroundColor:h.map(g=>g.result==='win'?'#4cbe7a':g.result==='loss'?'#e85555':'#7a9aaf')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#1e2e22'},ticks:{color:'#6a8a72',font:{size:10}}},y:{grid:{color:'#1e2e22'},ticks:{color:'#6a8a72',font:{size:10}}}}}});}
+else{ctx.canvas.parentElement.innerHTML='<p style="color:var(--text-dim);text-align:center;padding:2rem;font-size:.88rem;">Play some games to see your ELO trend</p>';}
+</script>
+{% endblock %}

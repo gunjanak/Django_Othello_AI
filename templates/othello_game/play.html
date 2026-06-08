@@ -1,0 +1,481 @@
+{% extends 'base.html' %}
+{% block title %}Othello vs AI (Depth {{ depth }}){% endblock %}
+{% block content %}
+<style>
+/* ── Layout ── */
+.play-wrap{max-width:960px;margin:0 auto;padding:1.5rem 1rem;display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;justify-content:center;}
+
+/* ── Board ── */
+.board-section{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.board-frame{background:var(--green-dim);border-radius:10px;padding:10px;box-shadow:0 0 60px rgba(45,122,79,0.2),0 20px 60px rgba(0,0,0,0.7);}
+.board-grid{display:grid;grid-template-columns:repeat(8,60px);grid-template-rows:repeat(8,60px);gap:3px;}
+.cell{width:60px;height:60px;background:var(--green);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background .15s;}
+.cell:hover{background:#3a9060;}
+.cell.hint::after{content:'';width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.22);border:2px solid rgba(255,255,255,0.35);position:absolute;}
+.cell.last-move{background:#3d9060;}
+.disc{width:46px;height:46px;border-radius:50%;transition:transform .18s ease;position:relative;}
+.disc.black{background:radial-gradient(circle at 35% 35%,#4a4a4a,#111);box-shadow:0 3px 8px rgba(0,0,0,0.6),inset 0 1px 2px rgba(255,255,255,0.15);}
+.disc.white{background:radial-gradient(circle at 35% 35%,#fff,#d0d0ce);box-shadow:0 3px 8px rgba(0,0,0,0.4),inset 0 1px 2px rgba(255,255,255,0.8);}
+.disc.flip{animation:flipDisc .25s ease forwards;}
+@keyframes flipDisc{0%{transform:scaleX(1)}50%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+
+/* ── Score bar ── */
+.score-bar{width:480px;height:12px;background:var(--border);border-radius:6px;overflow:hidden;position:relative;}
+.score-bar-fill{height:100%;background:linear-gradient(90deg,#111 var(--b-pct),#f0f0ee var(--b-pct));transition:--b-pct .4s;}
+.score-labels{width:480px;display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-dim);}
+.score-num{font-weight:700;font-size:1.1rem;}
+.score-num.b{color:#e0e0de;}
+.score-num.w{color:#b0b0ae;}
+
+/* ── Sidebar ── */
+.sidebar{display:flex;flex-direction:column;gap:14px;min-width:220px;max-width:240px;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;}
+.panel-title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.16em;color:var(--green-light);margin-bottom:12px;}
+.status-text{font-size:.85rem;color:var(--text);line-height:1.5;min-height:36px;}
+.status-text.thinking{color:var(--green-light);animation:pulse 1s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.p-row{display:flex;justify-content:space-between;gap:8px;margin-top:10px;}
+.p-box{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;}
+.p-box.active{border-color:var(--green-light);box-shadow:0 0 10px var(--green-glow);}
+.p-disc-sm{width:20px;height:20px;border-radius:50%;margin:0 auto 4px;}
+.p-disc-sm.black{background:#111;border:1px solid #444;}
+.p-disc-sm.white{background:#f0f0ee;border:1px solid #aaa;}
+.p-name{font-size:.72rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.p-elo{font-size:.68rem;color:var(--text-dim);margin-top:2px;}
+
+.setting{margin-bottom:10px;}
+.setting label{font-size:.65rem;font-weight:600;color:var(--text-dim);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;}
+.setting select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;font-size:.78rem;padding:6px 8px;border-radius:4px;outline:none;appearance:none;}
+.setting select:focus{border-color:var(--green-dim);}
+.act-btn{width:100%;padding:9px;background:transparent;border:1px solid var(--green-dim);color:var(--green-light);font-family:'Inter',sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;cursor:pointer;transition:background .15s;margin-bottom:7px;}
+.act-btn:last-child{margin-bottom:0;}
+.act-btn:hover{background:rgba(76,190,122,0.1);border-color:var(--green-light);}
+
+.move-log{height:160px;overflow-y:auto;font-size:.72rem;line-height:1.9;color:var(--text-dim);scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.ml-row{display:flex;gap:6px;}
+.ml-num{color:var(--green-dim);min-width:20px;}
+.ml-b{color:#c0c0be;}
+.ml-w{color:#888880;}
+
+/* ── Game-over overlay ── */
+.go-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center;}
+.go-overlay.show{display:flex;}
+.go-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2.5rem;text-align:center;max-width:380px;width:90%;}
+.go-discs{display:flex;justify-content:center;gap:10px;margin-bottom:1rem;}
+.go-disc{width:40px;height:40px;border-radius:50%;}
+.go-disc.black{background:radial-gradient(circle at 35% 35%,#4a4a4a,#111);box-shadow:0 3px 12px rgba(0,0,0,0.6);}
+.go-disc.white{background:radial-gradient(circle at 35% 35%,#fff,#d0d0ce);box-shadow:0 3px 12px rgba(0,0,0,0.3);}
+.go-score{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.08em;color:var(--text-dim);margin-bottom:.8rem;}
+.go-title{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:.1em;margin-bottom:.4rem;}
+.go-title.win{color:var(--win);}
+.go-title.loss{color:var(--loss);}
+.go-title.draw{color:var(--draw);}
+.go-elo{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:.05em;}
+.go-elo.pos{color:var(--win);}
+.go-elo.neg{color:var(--loss);}
+.go-elo.zero{color:var(--draw);}
+.go-sub{color:var(--text-dim);font-size:.88rem;margin:.5rem 0 1.5rem;}
+.go-btns{display:flex;gap:.75rem;justify-content:center;}
+</style>
+
+<div class="play-wrap">
+  <!-- Board -->
+  <div class="board-section">
+    <div class="score-labels">
+      <span>⚫ <span class="score-num b" id="score-black">2</span></span>
+      <span><span class="score-num w" id="score-white">2</span> ⚪</span>
+    </div>
+    <div class="score-bar" id="score-bar" style="--b-pct:50%"></div>
+    <div class="board-frame">
+      <div class="board-grid" id="board-grid"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="panel">
+      <div class="panel-title">Status</div>
+      <div class="status-text" id="status">Your turn — place a black disc</div>
+      <div class="p-row">
+        <div class="p-box active" id="pbox-human">
+          <div class="p-disc-sm black" id="player-disc-icon"></div>
+          <div class="p-name">{{ request.user.username }}</div>
+          <div class="p-elo">ELO <span id="live-elo">{{ player_elo }}</span></div>
+        </div>
+        <div class="p-box" id="pbox-ai">
+          <div class="p-disc-sm white" id="ai-disc-icon"></div>
+          <div class="p-name">AI Depth {{ depth }}</div>
+          <div class="p-elo">ELO {{ ai_elo }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Settings</div>
+      <div class="setting">
+        <label>You play as</label>
+        <select id="side-sel" onchange="resetGame()">
+          <option value="B">Black (moves first)</option>
+          <option value="W">White (moves second)</option>
+        </select>
+      </div>
+      <div class="setting">
+        <label>AI Depth</label>
+        <select id="depth-sel" onchange="resetGame()">
+          {% for d, e in depths %}
+          <option value="{{ d }}" {% if d == depth %}selected{% endif %}>{{ d }} — ELO {{ e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="act-btn" onclick="resetGame()">New Game</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Move History</div>
+      <div class="move-log" id="move-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Game-over overlay -->
+<div class="go-overlay" id="go-overlay">
+  <div class="go-card">
+    <div class="go-discs" id="go-discs"></div>
+    <div class="go-score" id="go-score"></div>
+    <div class="go-title" id="go-title">Victory!</div>
+    <div class="go-elo" id="go-elo-change"></div>
+    <div class="go-sub" id="go-sub"></div>
+    <div class="go-btns">
+      <button class="act-btn" style="margin:0" onclick="resetGame();document.getElementById('go-overlay').classList.remove('show')">Play Again</button>
+      <a href="/profile/" class="act-btn" style="display:inline-block;text-align:center;text-decoration:none;padding:9px 16px">Profile</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Django context ─────────────────────────────────────────────────────────────
+const CSRF_TOKEN = '{{ csrf_token }}';
+const SAVE_URL = '/game/save/';
+
+// ── Othello Engine ─────────────────────────────────────────────────────────────
+const SIZE = 8;
+const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+// Players: 1=black, 2=white
+let board, humanPlayer, aiPlayer, currentTurn, gameOver, thinking;
+let moveHistory, gameStartTime, savedToServer, lastMove;
+let humanDisc, aiDisc; // 'black' or 'white'
+
+function emptyBoard(){
+  const b=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  b[3][3]=2; b[4][4]=2; b[3][4]=1; b[4][3]=1;
+  return b;
+}
+
+function inBounds(r,c){ return r>=0&&r<SIZE&&c>=0&&c<SIZE; }
+
+function getFlips(b,r,c,player){
+  if(b[r][c]!==0) return [];
+  const opp=player===1?2:1;
+  const flips=[];
+  for(const[dr,dc] of DIRS){
+    const line=[];
+    let nr=r+dr, nc=c+dc;
+    while(inBounds(nr,nc)&&b[nr][nc]===opp){ line.push([nr,nc]); nr+=dr; nc+=dc; }
+    if(line.length&&inBounds(nr,nc)&&b[nr][nc]===player) flips.push(...line);
+  }
+  return flips;
+}
+
+function getValidMoves(b,player){
+  const moves=[];
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++)
+    if(b[r][c]===0&&getFlips(b,r,c,player).length>0) moves.push([r,c]);
+  return moves;
+}
+
+function applyMove(b,r,c,player){
+  const nb=b.map(row=>[...row]);
+  const flips=getFlips(nb,r,c,player);
+  nb[r][c]=player;
+  flips.forEach(([fr,fc])=>{ nb[fr][fc]=player; });
+  return nb;
+}
+
+function countDiscs(b,player){ let n=0; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(b[r][c]===player) n++; return n; }
+
+// ── Positional weight table (classic Othello heuristic) ──────────────────────
+const WEIGHTS = [
+  [120,-20,20, 5, 5,20,-20,120],
+  [-20,-40,-5,-5,-5,-5,-40,-20],
+  [ 20, -5,15, 3, 3,15, -5, 20],
+  [  5, -5, 3, 3, 3, 3, -5,  5],
+  [  5, -5, 3, 3, 3, 3, -5,  5],
+  [ 20, -5,15, 3, 3,15, -5, 20],
+  [-20,-40,-5,-5,-5,-5,-40,-20],
+  [120,-20,20, 5, 5,20,-20,120],
+];
+
+function evaluate(b,aiP){
+  const opp=aiP===1?2:1;
+  let score=0;
+  // Positional score
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    if(b[r][c]===aiP) score+=WEIGHTS[r][c];
+    else if(b[r][c]===opp) score-=WEIGHTS[r][c];
+  }
+  // Mobility
+  const aiMoves=getValidMoves(b,aiP).length;
+  const oppMoves=getValidMoves(b,opp).length;
+  score+=(aiMoves-oppMoves)*5;
+  // Disc difference (weighted less early on)
+  const aiCount=countDiscs(b,aiP), oppCount=countDiscs(b,opp);
+  score+=(aiCount-oppCount)*2;
+  return score;
+}
+
+function minimax(b,depth,alpha,beta,maximizing,aiP){
+  const player=maximizing?aiP:(aiP===1?2:1);
+  const moves=getValidMoves(b,player);
+  if(depth===0||(!moves.length&&!getValidMoves(b,aiP===1?2:1).length)){
+    const aiC=countDiscs(b,aiP), oppC=countDiscs(b,aiP===1?2:1);
+    if(aiC>oppC) return 100000;
+    if(aiC<oppC) return -100000;
+    return 0;
+  }
+  if(!moves.length) return minimax(b,depth-1,alpha,beta,!maximizing,aiP);
+
+  // Sort moves by weight for better pruning
+  moves.sort((a,b2)=>WEIGHTS[b2[0]][b2[1]]-WEIGHTS[a[0]][a[1]]);
+
+  if(maximizing){
+    let best=-Infinity;
+    for(const[r,c] of moves){
+      const nb=applyMove(b,r,c,aiP);
+      best=Math.max(best,minimax(nb,depth-1,alpha,beta,false,aiP));
+      alpha=Math.max(alpha,best); if(alpha>=beta) break;
+    }
+    return best;
+  } else {
+    const opp=aiP===1?2:1;
+    let best=Infinity;
+    for(const[r,c] of moves){
+      const nb=applyMove(b,r,c,opp);
+      best=Math.min(best,minimax(nb,depth-1,alpha,beta,true,aiP));
+      beta=Math.min(beta,best); if(alpha>=beta) break;
+    }
+    return best;
+  }
+}
+
+function getBestMove(b,aiP,depth){
+  const moves=getValidMoves(b,aiP);
+  if(!moves.length) return null;
+  moves.sort((a,b2)=>WEIGHTS[b2[0]][b2[1]]-WEIGHTS[a[0]][a[1]]);
+  let bestScore=-Infinity, bestMove=moves[0];
+  const opp=aiP===1?2:1;
+  for(const[r,c] of moves){
+    const nb=applyMove(b,r,c,aiP);
+    const score=minimax(nb,depth-1,-Infinity,Infinity,false,aiP);
+    if(score>bestScore){ bestScore=score; bestMove=[r,c]; }
+  }
+  return bestMove;
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+function colLabel(c){ return String.fromCharCode(97+c); }
+function rowLabel(r){ return 8-r; }
+
+function buildBoardDOM(){
+  const grid=document.getElementById('board-grid'); grid.innerHTML='';
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    const cell=document.createElement('div');
+    cell.className='cell'; cell.id=`c${r}${c}`;
+    cell.addEventListener('click',()=>handleCellClick(r,c));
+    grid.appendChild(cell);
+  }
+}
+
+function renderBoard(flipCells){
+  const validMoves=(!gameOver&&currentTurn===humanPlayer)?getValidMoves(board,humanPlayer):[];
+  const validSet=new Set(validMoves.map(([r,c])=>`${r}${c}`));
+
+  for(let r=0;r<SIZE;r++){
+    for(let c=0;c<SIZE;c++){
+      const cell=document.getElementById(`c${r}${c}`);
+      cell.className='cell';
+      if(lastMove&&lastMove[0]===r&&lastMove[1]===c) cell.classList.add('last-move');
+      if(validSet.has(`${r}${c}`)) cell.classList.add('hint');
+      cell.innerHTML='';
+      if(board[r][c]!==0){
+        const disc=document.createElement('div');
+        disc.className='disc '+(board[r][c]===1?'black':'white');
+        if(flipCells&&flipCells.some(([fr,fc])=>fr===r&&fc===c)) disc.classList.add('flip');
+        cell.appendChild(disc);
+      }
+    }
+  }
+  updateScoreBar();
+}
+
+function updateScoreBar(){
+  const bCount=countDiscs(board,1), wCount=countDiscs(board,2);
+  const total=bCount+wCount||1;
+  document.getElementById('score-black').textContent=bCount;
+  document.getElementById('score-white').textContent=wCount;
+  document.getElementById('score-bar').style.setProperty('--b-pct',(bCount/total*100).toFixed(1)+'%');
+}
+
+function updatePlayerBoxes(){
+  document.getElementById('pbox-human').className='p-box'+(currentTurn===humanPlayer&&!gameOver?' active':'');
+  document.getElementById('pbox-ai').className='p-box'+(currentTurn===aiPlayer&&!gameOver?' active':'');
+}
+
+function setStatus(msg,cls=''){
+  const el=document.getElementById('status');
+  el.textContent=msg; el.className='status-text'+(cls?' '+cls:'');
+}
+
+function renderMoveLog(){
+  const log=document.getElementById('move-log'); log.innerHTML='';
+  moveHistory.forEach((e,i)=>{
+    const row=document.createElement('div'); row.className='ml-row';
+    const hm=e.human?`<span class="ml-${humanDisc==='black'?'b':'w'}">${colLabel(e.human[1])}${rowLabel(e.human[0])}</span>`:'';
+    const am=e.ai?`<span class="ml-${aiDisc==='black'?'b':'w'}">${colLabel(e.ai[1])}${rowLabel(e.ai[0])}</span>`:'';
+    row.innerHTML=`<span class="ml-num">${i+1}.</span>${hm}${am?' '+am:''}`;
+    log.appendChild(row);
+  });
+  log.scrollTop=log.scrollHeight;
+}
+
+// ── Game logic ────────────────────────────────────────────────────────────────
+function handleCellClick(r,c){
+  if(gameOver||thinking||currentTurn!==humanPlayer) return;
+  const flips=getFlips(board,r,c,humanPlayer);
+  if(!flips.length){ setStatus('Invalid move — try a highlighted cell'); return; }
+  board=applyMove(board,r,c,humanPlayer);
+  lastMove=[r,c];
+  if(!moveHistory.length||moveHistory[moveHistory.length-1].ai!==null)
+    moveHistory.push({human:[r,c],ai:null});
+  else moveHistory[moveHistory.length-1].human=[r,c];
+  renderBoard(flips); renderMoveLog();
+
+  const aiMoves=getValidMoves(board,aiPlayer);
+  const humanMoves=getValidMoves(board,humanPlayer);
+  if(!aiMoves.length&&!humanMoves.length){ endGame(); return; }
+  if(!aiMoves.length){ setStatus('AI has no moves — your turn again'); return; }
+
+  currentTurn=aiPlayer; updatePlayerBoxes();
+  setStatus('AI is thinking…','thinking');
+  thinking=true;
+  setTimeout(doAIMove,100);
+}
+
+function doAIMove(){
+  const depth=parseInt(document.getElementById('depth-sel').value);
+  const move=getBestMove(board,aiPlayer,depth);
+  thinking=false;
+  if(!move){
+    const humanMoves=getValidMoves(board,humanPlayer);
+    if(!humanMoves.length){ endGame(); return; }
+    currentTurn=humanPlayer; updatePlayerBoxes();
+    setStatus(`AI has no moves — your turn (${humanDisc})`);
+    renderBoard(); return;
+  }
+  const [r,c]=move;
+  const flips=getFlips(board,r,c,aiPlayer);
+  board=applyMove(board,r,c,aiPlayer);
+  lastMove=[r,c];
+  if(moveHistory.length&&moveHistory[moveHistory.length-1].ai===null)
+    moveHistory[moveHistory.length-1].ai=[r,c];
+  else moveHistory.push({human:null,ai:[r,c]});
+  renderBoard(flips); renderMoveLog();
+
+  const humanMoves=getValidMoves(board,humanPlayer);
+  const aiMoves2=getValidMoves(board,aiPlayer);
+  if(!humanMoves.length&&!aiMoves2.length){ endGame(); return; }
+  if(!humanMoves.length){
+    setStatus('You have no moves — AI goes again','thinking');
+    thinking=true; setTimeout(doAIMove,200); return;
+  }
+  currentTurn=humanPlayer; updatePlayerBoxes();
+  setStatus(`Your turn — place a ${humanDisc} disc`);
+}
+
+function endGame(){
+  gameOver=true;
+  const pCount=countDiscs(board,humanPlayer), aiCount=countDiscs(board,aiPlayer);
+  let result;
+  if(pCount>aiCount) result='win';
+  else if(pCount<aiCount) result='loss';
+  else result='draw';
+  const msgs={win:'You win! Great play.',loss:'AI wins this round.',draw:"It's a draw!"};
+  setStatus(msgs[result]);
+  updatePlayerBoxes();
+  saveGame(result,pCount,aiCount);
+}
+
+function resetGame(){
+  board=emptyBoard();
+  const side=document.getElementById('side-sel').value;
+  humanPlayer=side==='B'?1:2;
+  aiPlayer=humanPlayer===1?2:1;
+  humanDisc=humanPlayer===1?'black':'white';
+  aiDisc=aiPlayer===1?'black':'white';
+  // Update disc icons
+  document.getElementById('player-disc-icon').className='p-disc-sm '+humanDisc;
+  document.getElementById('ai-disc-icon').className='p-disc-sm '+aiDisc;
+  currentTurn=1; gameOver=false; thinking=false; lastMove=null;
+  moveHistory=[]; savedToServer=false; gameStartTime=Date.now();
+  document.getElementById('go-overlay').classList.remove('show');
+  buildBoardDOM(); renderBoard(); renderMoveLog(); updatePlayerBoxes();
+  setStatus(`Your turn — place a ${humanDisc} disc`);
+  if(humanPlayer===2){ currentTurn=aiPlayer; thinking=true; setStatus('AI goes first…','thinking'); setTimeout(doAIMove,400); }
+}
+
+// ── Save to Django ─────────────────────────────────────────────────────────────
+function saveGame(result,playerScore,aiScore){
+  if(savedToServer) return; savedToServer=true;
+  const duration_s=Math.floor((Date.now()-gameStartTime)/1000);
+  const ai_depth=parseInt(document.getElementById('depth-sel').value);
+  fetch(SAVE_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({result,ai_depth,duration_s,player_score:playerScore,ai_score:aiScore})
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    const titles={win:'Victory!',loss:'Defeated',draw:'Draw'};
+    const subs={win:`You won ${playerScore}–${aiScore}! ELO updated.`,loss:`AI won ${aiScore}–${playerScore}.`,draw:`${playerScore}–${aiScore} — it's a draw.`};
+    document.getElementById('go-title').textContent=titles[result];
+    document.getElementById('go-title').className='go-title '+result;
+    document.getElementById('go-score').textContent=`${playerScore} — ${aiScore}`;
+    document.getElementById('go-sub').textContent=subs[result];
+    // discs
+    const d=document.getElementById('go-discs'); d.innerHTML='';
+    const d1=document.createElement('div'); d1.className='go-disc '+humanDisc;
+    const d2=document.createElement('div'); d2.className='go-disc '+aiDisc;
+    d.append(d1,d2);
+    if(data.status==='ok'){
+      const ch=data.elo_change;
+      document.getElementById('live-elo').textContent=data.elo_after;
+      document.getElementById('go-elo-change').textContent=(ch>=0?'+':'')+ch+' ELO';
+      document.getElementById('go-elo-change').className='go-elo '+(ch>0?'pos':ch<0?'neg':'zero');
+    } else {
+      document.getElementById('go-elo-change').textContent='ELO not saved';
+    }
+    setTimeout(()=>document.getElementById('go-overlay').classList.add('show'),600);
+  })
+  .catch(()=>{
+    document.getElementById('go-title').textContent={win:'Victory!',loss:'Defeated',draw:'Draw'}[result];
+    document.getElementById('go-title').className='go-title '+result;
+    document.getElementById('go-score').textContent=`${playerScore} — ${aiScore}`;
+    document.getElementById('go-elo-change').textContent='Could not save';
+    setTimeout(()=>document.getElementById('go-overlay').classList.add('show'),600);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+resetGame();
+</script>
+{% endblock %}

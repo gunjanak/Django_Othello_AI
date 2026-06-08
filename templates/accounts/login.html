@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Login — Othello Arena{% endblock %}
+{% block content %}
+<style>
+.auth-wrap{min-height:calc(100vh - 58px);display:flex;align-items:center;justify-content:center;padding:2rem;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:2.5rem;width:100%;max-width:420px;}
+.auth-title{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:.1em;color:var(--green-light);margin-bottom:.3rem;}
+.auth-sub{color:var(--text-dim);margin-bottom:1.8rem;font-size:.9rem;}
+.field{margin-bottom:1.1rem;}
+label{display:block;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:.4rem;}
+input.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.6rem .9rem;font-family:'Inter',sans-serif;font-size:.95rem;border-radius:var(--radius);outline:none;transition:border-color .2s;}
+input.form-input:focus{border-color:var(--green-dim);}
+.field-error{color:var(--loss);font-size:.8rem;margin-top:.3rem;}
+.auth-submit{width:100%;padding:.75rem;margin-top:.5rem;font-size:.8rem;}
+.auth-alt{text-align:center;margin-top:1.5rem;color:var(--text-dim);font-size:.88rem;}
+.auth-alt a{color:var(--green-light);text-decoration:none;}
+</style>
+<div class="auth-wrap"><div class="auth-card">
+  <h1 class="auth-title">Welcome Back</h1>
+  <p class="auth-sub">Sign in to track your ELO</p>
+  <form method="post" novalidate>{% csrf_token %}
+    {% for field in form %}<div class="field"><label>{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="field-error">{{ field.errors|join:", " }}</div>{% endif %}</div>{% endfor %}
+    <button type="submit" class="btn btn-primary auth-submit">Sign In</button>
+  </form>
+  <p class="auth-alt">New here? <a href="/accounts/register/">Create an account</a></p>
+</div></div>
+{% endblock %}
